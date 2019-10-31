@@ -97,6 +97,7 @@ void matrix_connection_cancel_sync(PurpleConnection *pc)
 void _sync_error(MatrixConnectionData *ma, gpointer user_data,
         const gchar *error_message)
 {
+    purple_debug_info("matrixprpl", "###_sync_error###%s\n", error_message);
     ma->active_sync = NULL;
     matrix_api_error(ma, user_data, error_message);
 }
@@ -107,6 +108,7 @@ void _sync_error(MatrixConnectionData *ma, gpointer user_data,
 void _sync_bad_response(MatrixConnectionData *ma, gpointer user_data,
         int http_response_code, JsonNode *json_root)
 {
+    purple_debug_info("matrixprpl", "###_sync_bad_response###%d\n", http_response_code);
     ma->active_sync = NULL;
     matrix_api_bad_response(ma, user_data, http_response_code, json_root);
 }
@@ -120,15 +122,20 @@ static void _sync_complete(MatrixConnectionData *ma, gpointer user_data,
     PurpleConnection *pc = ma->pc;
     const gchar *next_batch;
 
+    purple_debug_info("matrixprpl", "###_sync_complete###1\n");
+
     ma->active_sync = NULL;
     ma->syncRun = TRUE;
     clock_gettime(CLOCK_MONOTONIC_RAW, &ma->last_sync);
 
     if(body == NULL) {
+        purple_debug_info("matrixprpl", "###_sync_complete### BODY NULL ERROR\n");
         purple_connection_error_reason(pc, PURPLE_CONNECTION_ERROR_OTHER_ERROR,
                 "Couldn't parse sync response");
         return;
     }
+
+    purple_debug_info("matrixprpl", "###_sync_complete###2\n");
 
     // Only update progress and set state if we're not already connected
     if (purple_connection_get_state(pc) != PURPLE_CONNECTED) {
@@ -136,26 +143,36 @@ static void _sync_complete(MatrixConnectionData *ma, gpointer user_data,
         purple_connection_set_state(pc, PURPLE_CONNECTED);
     }
 
+    purple_debug_info("matrixprpl", "###_sync_complete###3\n");
+
     matrix_sync_parse(pc, body, &next_batch);
+
+    purple_debug_info("matrixprpl", "###_sync_complete###4\n");
 
     /* Start the next sync */
     if(next_batch == NULL) {
+        purple_debug_info("matrixprpl", "###_sync_complete### NO NEXT BATCH ERROR\n");
         purple_connection_error_reason(pc, PURPLE_CONNECTION_ERROR_OTHER_ERROR,
                 "No next_batch field");
         return;
     }
+    purple_debug_info("matrixprpl", "###_sync_complete###5\n");
     purple_account_set_string(pc->account, PRPL_ACCOUNT_OPT_NEXT_BATCH,
             next_batch);
+    purple_debug_info("matrixprpl", "###_sync_complete###6\n");
 
     _start_next_sync(ma, next_batch, FALSE);
+    purple_debug_info("matrixprpl", "###_sync_complete###7\n");
 }
 
 
 static void _start_next_sync(MatrixConnectionData *ma,
         const gchar *next_batch, gboolean full_state)
 {
+    purple_debug_info("matrixprpl", "###_start_next_sync1###\n");
     ma->active_sync = matrix_api_sync(ma, next_batch, 30000, full_state,
             _sync_complete, _sync_error, _sync_bad_response, NULL);
+    purple_debug_info("matrixprpl", "###_start_next_sync2###\n");
 }
 
 
@@ -174,6 +191,7 @@ static gboolean _account_has_active_conversations(PurpleAccount *account)
 
 static gboolean checkSyncRunning(gpointer user_data)
 {
+    purple_debug_info("matrixprpl", "###checkSyncRunning###\n");
     MatrixConnectionData *ma = (MatrixConnectionData*) user_data;
     const gchar *next_batch;
 
@@ -200,12 +218,17 @@ static gboolean checkSyncRunning(gpointer user_data)
     }
 
     if(restart){
+      purple_debug_info("matrixprpl", "###checkSyncRunning### NO %ld\n", elapsedMillis);
+      purple_debug_info("matrixprpl", "### CANCELING + RE-RUNNING SYNC !!!!!### NO %ld\n", elapsedMillis);
       clock_gettime(CLOCK_MONOTONIC_RAW, &ma->last_sync);
       matrix_connection_cancel_sync(ma->pc);
       next_batch = purple_account_get_string(ma->pc->account,
             PRPL_ACCOUNT_OPT_NEXT_BATCH, NULL);
       _start_next_sync(ma, next_batch, FALSE);
+    }else{
+      purple_debug_info("matrixprpl", "###checkSyncRunning### YES %ld\n", elapsedMillis);
     }
+
     return TRUE;
 }
 
